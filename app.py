@@ -5,95 +5,89 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("🤝 熟人媒合生態系 - 持久化測試版")
+st.title("🤝 熟人媒合生態系 - 生態觀測站")
 
-# --- 1. 資料庫連結設定 ---
-# 在 Streamlit Cloud 部署時，需在 Secrets 設定中加入 Google Sheets 的 URL
+# --- 1. 資料庫連結設定 (僅讀取模式) ---
+# Secrets 中只需 spreadsheet 網址即可，不需複雜金鑰
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data():
-    """從 Google Sheets 讀取資料，若失敗則回傳預設值"""
+def load_form_data():
+    """從 Google 表單連結的試算表讀取資料"""
     try:
-        nodes_df = conn.read(worksheet="nodes")
-        edges_df = conn.read(worksheet="edges")
-        return nodes_df, edges_df
-    except:
-        return pd.DataFrame(), pd.DataFrame()
+        # ttl=60 代表每 60 秒緩存失效，會去抓一次新資料
+        df = conn.read(ttl=60) 
+        return df
+    except Exception as e:
+        st.error(f"資料讀取失敗: {e}")
+        return pd.DataFrame()
 
-# --- 2. 初始化 Session State (將資料存入記憶體以供即時互動) ---
-if 'initialized' not in st.session_state:
-    nodes_df, edges_df = load_data()
-    
-    # 如果資料庫有東西，就用資料庫的；否則用預設初始資料
-    if not nodes_df.empty:
-        st.session_state.nodes = [Node(id=row['id'], label=row['label'], size=20) for _, row in nodes_df.iterrows()]
-        st.session_state.edges = [Edge(source=row['source'], target=row['target']) for _, row in edges_df.iterrows()]
-        st.session_state.raw_edges = [(row['source'], row['target']) for _, row in edges_df.iterrows()]
-    else:
-        # 預設初始資料 (第一次執行時使用)
-        st.session_state.nodes = [
-            Node(id="Denny", label="Denny (我)", size=25, color="#FF4B4B"),
-            Node(id="爸爸", label="爸爸", size=20),
-            Node(id="同事Nick", label="同事 Nick", size=20),
-        ]
-        st.session_state.edges = [Edge(source="Denny", target="爸爸"), Edge(source="Denny", target="同事Nick")]
-        st.session_state.raw_edges = [("Denny", "爸爸"), ("Denny", "同事Nick")]
-    
-    st.session_state.initialized = True
+# --- 2. 建立人脈圖譜邏輯 ---
+df = load_form_data()
 
-def save_to_sheets():
-    """將目前的狀態寫回 Google Sheets"""
-    # 轉換 nodes
-    n_data = [{"id": n.id, "label": n.label} for n in st.session_state.nodes]
-    # 轉換 edges
-    e_data = [{"source": e[0], "target": e[1]} for e in st.session_state.raw_edges]
-    
-    conn.update(worksheet="nodes", data=pd.DataFrame(n_data))
-    conn.update(worksheet="edges", data=pd.DataFrame(e_data))
-    st.toast("✅ 資料已同步至 Google Sheets")
+# 初始化節點與連結
+nodes = [Node(id="Denny", label="Denny (我)", size=25, color="#FF4B4B")]
+edges = []
+raw_edges = []
 
-# --- 3. 側邊欄：管理功能 ---
+# 建立基礎關係 (你可以根據需求手動預設幾個人)
+base_people = ["爸爸", "同事Nick"]
+for person in base_people:
+    nodes.append(Node(id=person, label=person, size=20))
+    edges.append(Edge(source="Denny", target=person))
+    raw_edges.append(("Denny", person))
+
+# --- 3. 自動處理表單傳入的新人脈 ---
+# 假設你的 Google 表單欄位名稱分別為: "姓名", "推薦人", "專長"
+if not df.empty:
+    for _, row in df.iterrows():
+        # 確保資料是字串且處理空值
+        name = str(row.get('你的名字', '')).strip()
+        referrer = str(row.get('你認識的人', '')).strip()
+        skill = str(row.get('你的專長', ''))
+
+        if name and name != 'nan':
+            # 如果這個人還沒在節點裡，就加入他
+            if name not in [n.id for n in nodes]:
+                display_label = f"{name}\n({skill})" if skill != 'nan' and skill else name
+                nodes.append(Node(id=name, label=display_label, size=20))
+            
+            # 如果推薦人存在，建立與推薦人的連結
+            if referrer and referrer != 'nan':
+                # 防止重複建立連結
+                if (referrer, name) not in raw_edges and (name, referrer) not in raw_edges:
+                    raw_edges.append((referrer, name))
+                    edges.append(Edge(source=referrer, target=name))
+
+# --- 4. 側邊欄：引導與管理 ---
 with st.sidebar:
-    st.header("➕ 擴展人脈網")
-    new_person = st.text_input("人名")
-    knows_who = st.selectbox("認識誰？", [n.id for n in st.session_state.nodes])
-    skill = st.text_input("專業技能 (選填)")
+    st.header("📢 擴展生態系")
+    st.write("目前改用 Google 表單收集資料，確保資料永不遺失！")
     
-    if st.button("加入生態系並儲存"):
-        if new_person and new_person not in [n.id for n in st.session_state.nodes]:
-            label = f"{new_person}\n({skill})" if skill else new_person
-            st.session_state.nodes.append(Node(id=new_person, label=label, size=20))
-            st.session_state.edges.append(Edge(source=knows_who, target=new_person))
-            st.session_state.raw_edges.append((knows_who, new_person))
-            save_to_sheets() # 寫回資料庫
-            st.rerun()
+    # 這裡貼上你的 Google 表單網址
+    st.link_button("👉 填寫人脈問卷", "https://docs.google.com/forms/d/e/1FAIpQLSc8RqsHcLMk5q2KPux5yfAfs4Ls2IdYwxzDSmVuHx9QNw4iZA/viewform?usp=publish-editor")
+    
+    st.divider()
+    st.info("💡 提示：在表單提交後，約一分鐘後重新整理網頁即可看到新節點。")
 
-    st.markdown("---")
-    st.header("🗑️ 管理人脈網")
-    delete_person = st.selectbox("選擇要刪除的人", [n.id for n in st.session_state.nodes if n.id != "Denny"])
-    if st.button("刪除此人"):
-        st.session_state.nodes = [n for n in st.session_state.nodes if n.id != delete_person]
-        st.session_state.raw_edges = [re for re in st.session_state.raw_edges if re[0] != delete_person and re[1] != delete_person]
-        st.session_state.edges = [Edge(source=re[0], target=re[1]) for re in st.session_state.raw_edges]
-        save_to_sheets() # 寫回資料庫
-        st.rerun()
-
-# --- 4. 主畫面：搜尋與圖形 ---
+# --- 5. 主畫面：搜尋功能 ---
 st.subheader("🔍 尋找可信賴的專家")
 col1, col2 = st.columns([1, 3])
 
 with col1:
     search_target = st.text_input("輸入你想找的人名", "爸爸")
     if st.button("計算信任路徑"):
+        # 建立 NetworkX 演算法模型
         temp_nx = nx.Graph()
-        temp_nx.add_edges_from(st.session_state.raw_edges)
+        temp_nx.add_edges_from(raw_edges)
+        
         try:
             path = nx.shortest_path(temp_nx, source="Denny", target=search_target)
             st.success("✅ 找到安全路徑！")
             st.info(" ➡️ ".join(path))
         except:
-            st.error("❌ 目前人脈網尚未連結。")
+            st.error("❌ 目前人脈網尚未與此人建立連結。")
 
 with col2:
+    # 繪製圖形
     config = Config(width=800, height=600, directed=False, physics=True, hierarchical=False)
-    agraph(nodes=st.session_state.nodes, edges=st.session_state.edges, config=config)
+    agraph(nodes=nodes, edges=edges, config=config)

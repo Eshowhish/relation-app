@@ -1,3 +1,5 @@
 streamlit
 streamlit-agraph
 networkx
+st-gsheets-connection
+pandas

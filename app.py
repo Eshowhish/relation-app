@@ -8,11 +8,15 @@ import urllib.request
 st.set_page_config(layout="wide")
 st.title("🤝 熟人媒合生態系 - AI 智能擴展版")
 
-# --- 1. AI 文字解析核心邏輯 (v1beta 終極修正版) ---
+# --- 1. AI 文字解析核心邏輯 ---
 def analyze_text_with_ai(user_text, api_key):
     """將使用者的隨性描述，透過 AI 轉化為標準的 Node 與 Edge JSON 格式"""
-    api_key = api_key.strip("[]\"' ")
-    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    # 第一重清洗：拔除金鑰前後的空格、中括號、引號
+    clean_key = str(api_key).strip("[]\"' ")
+    
+    # 第二重防護：建立純淨網址，並對整串網址做點對點清洗，確保絕對沒有 [ 符號出現在開頭
+    raw_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
+    url = raw_url.replace("[", "").replace("]", "").strip()
     
     prompt = f"""
     你是一個專門分析人際關係與專長的 AI。請分析以下這段文字，並萃取取出裡面提到的人名（Nodes）以及人與人之間的認識關係（Edges）。

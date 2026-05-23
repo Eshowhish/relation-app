@@ -8,14 +8,11 @@ import urllib.request
 st.set_page_config(layout="wide")
 st.title("🤝 熟人媒合生態系 - AI 智能擴展版")
 
-# --- 1. AI 文字解析核心邏輯 (加入金鑰自動清洗防呆) ---
+# --- 1. AI 文字解析核心邏輯 (v1beta 終極修正版) ---
 def analyze_text_with_ai(user_text, api_key):
     """將使用者的隨性描述，透過 AI 轉化為標準的 Node 與 Edge JSON 格式"""
-    # 強制清洗金鑰，剃除可能誤貼的括號、引號與空白
     api_key = api_key.strip("[]\"' ")
-    
-    # 官方穩定正式版端點
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){api_key}"
     
     prompt = f"""
     你是一個專門分析人際關係與專長的 AI。請分析以下這段文字，並萃取取出裡面提到的人名（Nodes）以及人與人之間的認識關係（Edges）。
@@ -55,8 +52,6 @@ def analyze_text_with_ai(user_text, api_key):
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode('utf-8'))
             text_response = result['candidates'][0]['content']['parts'][0]['text']
-            
-            # 清理可能被 AI 誤加的 markdown 標籤
             text_response = text_response.replace("```json", "").replace("```", "").strip()
             return json.loads(text_response)
     except Exception as e:
@@ -102,14 +97,12 @@ with st.sidebar:
                 ai_result = analyze_text_with_ai(user_input, gemini_key)
                 
                 if ai_result:
-                    # 處理 AI 解析出的節點
                     for n in ai_result.get("nodes", []):
                         n_id = n["id"].strip()
                         n_skill = n.get("skill", "").strip()
                         if n_id and n_id not in st.session_state.nodes_dict:
                             st.session_state.nodes_dict[n_id] = f"{n_id}\n({n_skill})" if n_skill else n_id
                     
-                    # 處理 AI 解析出的關係
                     for e in ai_result.get("edges", []):
                         src = e["source"].strip()
                         tgt = e["target"].strip()

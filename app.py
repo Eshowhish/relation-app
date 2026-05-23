@@ -11,7 +11,7 @@ st.title("🤝 熟人媒合生態系 - AI 智能擴展版")
 # --- 1. AI 文字解析核心邏輯 (使用免費的 Gemini API) ---
 def analyze_text_with_ai(user_text, api_key):
     """將使用者的隨性描述，透過 AI 轉化為標準的 Node 與 Edge JSON 格式"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
     
     # 建立嚴格的 Prompt，強迫 AI 只能回傳標準 JSON
     prompt = f"""

@@ -55,9 +55,7 @@ def analyze_text_with_ai(user_text, api_key):
         return None
 
 # --- 2. 初始化 Session State ---
-# 為了能即時看到 AI 加進來的圓點，我們使用 Session State 來維持狀態
 if 'nodes_dict' not in st.session_state:
-    # 預設基礎人脈資料庫
     st.session_state.nodes_dict = {
         "Denny": "Denny (我)",
         "爸爸": "爸爸",
@@ -79,12 +77,11 @@ with st.sidebar:
     st.header("🤖 AI 語意匯入人脈")
     st.write("不需填問卷！直接貼上對話紀錄或隨性打一段話：")
     
-    # 讓使用者在網頁上填入自己的 Gemini API 金鑰
     gemini_key = st.text_input("輸入您的 Gemini API Key", type="password", help="請至 Google AI Studio 免費申請")
     
     user_input = st.text_area(
         "輸入人脈描述：", 
-        placeholder="例如：我爸是水電王師傅。上次 Nick 介紹的鋼琴老師很有 Patience，對了，鋼琴老師還認識一位室內設計師！",
+        placeholder="例如：我爸是水電王師傅。上次 Nick 介紹的鋼琴老師很有耐心，對了，鋼琴老師還認識一位室內設計師！",
         height=150
     )
     
@@ -107,12 +104,11 @@ with st.sidebar:
                     for e in ai_result.get("edges", []):
                         src = e["source"].strip()
                         tgt = e["target"].strip()
-                        if src Opp tgt: # 避免自連
-                            # 確保雙向關係不重複加入
+                        if src != tgt: # 這裡已經修復了！
                             if (src, tgt) not in st.session_state.raw_edges and (tgt, src) not in st.session_state.raw_edges:
                                 st.session_state.raw_edges.append((src, tgt))
                     
-                    st.success("🎉 AI 成功解析！已動態動態更新圖譜。")
+                    st.success("🎉 AI 成功解析！已動態更新圖譜。")
                     st.rerun()
 
 # --- 4. 轉換為 agraph 所需的視覺化物件 ---
@@ -120,7 +116,7 @@ nodes = []
 for n_id, n_label in st.session_state.nodes_dict.items():
     if n_id == "Denny":
         nodes.append(Node(id=n_id, label=n_label, size=25, color="#FF4B4B"))
-    elif "師" in n_id or "老師" in n_id: # 簡單高亮專家節點
+    elif "師" in n_id or "老師" in n_id:
         nodes.append(Node(id=n_id, label=n_label, size=20, color="#1E90FF"))
     else:
         nodes.append(Node(id=n_id, label=n_label, size=20))
@@ -134,7 +130,6 @@ col1, col2 = st.columns([1, 3])
 with col1:
     search_target = st.text_input("輸入你想找的人名或關鍵字", "室內設計師")
     if st.button("計算信任路徑"):
-        # 建立 NetworkX 演算法模型
         temp_nx = nx.Graph()
         temp_nx.add_edges_from(st.session_state.raw_edges)
         
@@ -147,6 +142,5 @@ with col1:
             st.error("❌ 目前人脈網尚未與此人建立連結。")
 
 with col2:
-    # 繪製圖形
     config = Config(width=800, height=600, directed=False, physics=True, hierarchical=False)
     agraph(nodes=nodes, edges=edges, config=config)

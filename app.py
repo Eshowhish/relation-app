@@ -8,18 +8,19 @@ import urllib.request
 st.set_page_config(layout="wide")
 st.title("🤝 熟人媒合生態系 - AI 智能擴展版")
 
-# --- 1. AI 文字解析核心邏輯 (使用官方最新 v1 正式版穩定路徑) ---
+# --- 1. AI 文字解析核心邏輯 (使用官方最新 v1 正式版穩定路徑，修復 400 錯誤) ---
 def analyze_text_with_ai(user_text, api_key):
     """將使用者的隨性描述，透過 AI 轉化為標準的 Node 與 Edge JSON 格式"""
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # 官方穩定正式版端點
+    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){api_key}"
     
     prompt = f"""
-    你是一個專門分析人關係與專長的 AI。請分析以下這段文字，並萃取取出裡面提到的人名（Nodes）以及人與人之間的認識關係（Edges）。
+    你是一個專門分析人際關係與專長的 AI。請分析以下這段文字，並萃取取出裡面提到的人名（Nodes）以及人與人之間的認識關係（Edges）。
     
     【文字內容】: "{user_text}"
     
     【輸出規範】:
-    請「嚴格」只回傳一個 JSON 物件，不要包含任何 markdown 語法（例如 ```json 標籤），格式如下：
+    請「嚴格」只回傳一個標準的 JSON 物件，不要包含任何 markdown 語法（絕對不要有 ```json 標籤），格式必須完全如下：
     {{
         "nodes": [
             {{"id": "人名", "skill": "他的專業技能，若文字沒提到則留空字串"}}
@@ -34,11 +35,13 @@ def analyze_text_with_ai(user_text, api_key):
     2. 關係是雙向的，一對關係只需要建立一筆 edge 即可。
     """
     
+    # 解決 400 錯誤的關鍵：簡化請求結構，改用 Prompt 強力約束 JSON 輸出
     data = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json"
-        }
+        "contents": [{
+            "parts": [{
+                "text": prompt
+            }]
+        }]
     }
     
     try:
@@ -50,6 +53,9 @@ def analyze_text_with_ai(user_text, api_key):
         with urllib.request.urlopen(req) as response:
             result = json.loads(response.read().decode('utf-8'))
             text_response = result['candidates'][0]['content']['parts'][0]['text']
+            
+            # 清理可能被 AI 誤加的 markdown 標籤，確保 json.loads 100% 成功
+            text_response = text_response.replace("```json", "").replace("```", "").strip()
             return json.loads(text_response)
     except Exception as e:
         st.error(f"AI 解析失敗，請檢查 API Key 或網路連線: {e}")
@@ -82,7 +88,7 @@ with st.sidebar:
     
     user_input = st.text_area(
         "輸入人脈描述：", 
-        placeholder="例如：我爸是水電王師傅。上次 Nick 介紹的鋼琴老師很有 Patience，對了，鋼琴老師還認識一位室內設計師！",
+        placeholder="例如：我爸是水電王師傅。上次 Nick 介紹的鋼琴老師很有耐心，對了，鋼琴老師還認識一位室內設計師！",
         height=150
     )
     
@@ -94,12 +100,14 @@ with st.sidebar:
                 ai_result = analyze_text_with_ai(user_input, gemini_key)
                 
                 if ai_result:
+                    # 處理 AI 解析出的節點
                     for n in ai_result.get("nodes", []):
                         n_id = n["id"].strip()
                         n_skill = n.get("skill", "").strip()
                         if n_id and n_id not in st.session_state.nodes_dict:
                             st.session_state.nodes_dict[n_id] = f"{n_id}\n({n_skill})" if n_skill else n_id
                     
+                    # 處理 AI 解析出的關係
                     for e in ai_result.get("edges", []):
                         src = e["source"].strip()
                         tgt = e["target"].strip()

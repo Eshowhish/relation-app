@@ -8,11 +8,14 @@ import urllib.request
 st.set_page_config(layout="wide")
 st.title("🤝 熟人媒合生態系 - AI 智能擴展版")
 
-# --- 1. AI 文字解析核心邏輯 (使用官方最新 v1 正式版穩定路徑，修復 400 錯誤) ---
+# --- 1. AI 文字解析核心邏輯 (加入金鑰自動清洗防呆) ---
 def analyze_text_with_ai(user_text, api_key):
     """將使用者的隨性描述，透過 AI 轉化為標準的 Node 與 Edge JSON 格式"""
+    # 強制清洗金鑰，剃除可能誤貼的括號、引號與空白
+    api_key = api_key.strip("[]\"' ")
+    
     # 官方穩定正式版端點
-    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=){api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     prompt = f"""
     你是一個專門分析人際關係與專長的 AI。請分析以下這段文字，並萃取取出裡面提到的人名（Nodes）以及人與人之間的認識關係（Edges）。
@@ -35,7 +38,6 @@ def analyze_text_with_ai(user_text, api_key):
     2. 關係是雙向的，一對關係只需要建立一筆 edge 即可。
     """
     
-    # 解決 400 錯誤的關鍵：簡化請求結構，改用 Prompt 強力約束 JSON 輸出
     data = {
         "contents": [{
             "parts": [{
@@ -54,7 +56,7 @@ def analyze_text_with_ai(user_text, api_key):
             result = json.loads(response.read().decode('utf-8'))
             text_response = result['candidates'][0]['content']['parts'][0]['text']
             
-            # 清理可能被 AI 誤加的 markdown 標籤，確保 json.loads 100% 成功
+            # 清理可能被 AI 誤加的 markdown 標籤
             text_response = text_response.replace("```json", "").replace("```", "").strip()
             return json.loads(text_response)
     except Exception as e:
@@ -88,7 +90,7 @@ with st.sidebar:
     
     user_input = st.text_area(
         "輸入人脈描述：", 
-        placeholder="例如：我爸是水電王師傅。上次 Nick 介紹的鋼琴老師很有耐心，對了，鋼琴老師還認識一位室內設計師！",
+        placeholder="例如：我爸是水電王師傅。上次 Nick 介紹的鋼琴老師很有 Patience，對了，鋼琴老師還認識一位室內設計師！",
         height=150
     )
     
